@@ -373,7 +373,7 @@ public class editorScript : EditorWindow{
 
         EditorGUILayout.BeginHorizontal();
         GUILayout.Label("front wheels position Y" ,  GUILayout.Height(30));
-        frontOffset.y = EditorGUILayout.Slider(frontOffset.y,0, 1);
+        frontOffset.y = EditorGUILayout.Slider(frontOffset.y, 0, 1);
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
@@ -406,7 +406,7 @@ public class editorScript : EditorWindow{
 
         EditorGUILayout.BeginHorizontal();
         GUILayout.Label("rear wheels position Y" ,  GUILayout.Height(30));
-        rearOffset.y = EditorGUILayout.Slider(rearOffset.y,0, 1);
+        rearOffset.y = EditorGUILayout.Slider(rearOffset.y, 0, 1);
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
