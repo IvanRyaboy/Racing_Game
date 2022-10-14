@@ -18,13 +18,26 @@ public class CarController : MonoBehaviour
     [SerializeField] float handBrakeForce;
     [SerializeField] float brakeForce;
     [SerializeField] float wheelRollResistance;
+    float steeringAxis;
+    float steeringSpeed = 0.5f;
+    float maxSteeringAngle = 27f;
     private Quaternion wheelRotation;
     private Vector3 wheelPosition;
     [HideInInspector] public inputs input;
     [HideInInspector] Rigidbody rb;
+    private bool isTractionLocked, isDrifting;
     int GearNum = 0;
-    private float wheelsRPM, GearChangeRate, tr = 0, vertical, horizontal, finalTurnAngle, radius, time;
+    private float wheelsRPM, GearChangeRate, tr = 0, vertical, horizontal, finalTurnAngle, radius, time, CarSpeed, driftingAxis, localVelocityX, steeringAngle;
     private bool reverse;
+    float handbrakeDriftMultiplier = 2f;
+    WheelFrictionCurve FLwheelFriction;
+    float FLWextremumSlip;
+    WheelFrictionCurve FRwheelFriction;
+    float FRWextremumSlip;
+    WheelFrictionCurve RLwheelFriction;
+    float RLWextremumSlip;
+    WheelFrictionCurve RRwheelFriction;
+    float RRWextremumSlip;
     
 
 
@@ -35,24 +48,69 @@ public class CarController : MonoBehaviour
         Gears = new float[8]{0f, 4.78f, 3.056f, 2.153f, 1.678f, 1.390f, 1.203f, 1.0f};
     }
 
+    void Start()
+    {
+        FLwheelFriction = new WheelFrictionCurve ();
+        FLwheelFriction.extremumSlip = wheelColliders[0].sidewaysFriction.extremumSlip;
+        FLWextremumSlip = wheelColliders[0].sidewaysFriction.extremumSlip;
+        FLwheelFriction.extremumValue = wheelColliders[0].sidewaysFriction.extremumValue;
+        FLwheelFriction.asymptoteSlip = wheelColliders[0].sidewaysFriction.asymptoteSlip;
+        FLwheelFriction.asymptoteValue = wheelColliders[0].sidewaysFriction.asymptoteValue;
+        FLwheelFriction.stiffness = wheelColliders[0].sidewaysFriction.stiffness;
+      FRwheelFriction = new WheelFrictionCurve ();
+        FRwheelFriction.extremumSlip = wheelColliders[1].sidewaysFriction.extremumSlip;
+        FRWextremumSlip = wheelColliders[1].sidewaysFriction.extremumSlip;
+        FRwheelFriction.extremumValue = wheelColliders[1].sidewaysFriction.extremumValue;
+        FRwheelFriction.asymptoteSlip = wheelColliders[1].sidewaysFriction.asymptoteSlip;
+        FRwheelFriction.asymptoteValue = wheelColliders[1].sidewaysFriction.asymptoteValue;
+        FRwheelFriction.stiffness = wheelColliders[1].sidewaysFriction.stiffness;
+      RLwheelFriction = new WheelFrictionCurve ();
+        RLwheelFriction.extremumSlip = wheelColliders[2].sidewaysFriction.extremumSlip;
+        RLWextremumSlip = wheelColliders[2].sidewaysFriction.extremumSlip;
+        RLwheelFriction.extremumValue = wheelColliders[2].sidewaysFriction.extremumValue;
+        RLwheelFriction.asymptoteSlip = wheelColliders[2].sidewaysFriction.asymptoteSlip;
+        RLwheelFriction.asymptoteValue = wheelColliders[2].sidewaysFriction.asymptoteValue;
+        RLwheelFriction.stiffness = wheelColliders[2].sidewaysFriction.stiffness;
+      RRwheelFriction = new WheelFrictionCurve ();
+        RRwheelFriction.extremumSlip = wheelColliders[3].sidewaysFriction.extremumSlip;
+        RRWextremumSlip = wheelColliders[3].sidewaysFriction.extremumSlip;
+        RRwheelFriction.extremumValue = wheelColliders[3].sidewaysFriction.extremumValue;
+        RRwheelFriction.asymptoteSlip = wheelColliders[3].sidewaysFriction.asymptoteSlip;
+        RRwheelFriction.asymptoteValue = wheelColliders[3].sidewaysFriction.asymptoteValue;
+        RRwheelFriction.stiffness = wheelColliders[3].sidewaysFriction.stiffness;
+    }
+
     void Update()
     { 
-        CurrentBrakeForce();
+        localVelocityX = transform.InverseTransformDirection(rb.velocity).x;
         CurrentEngineRPM();
         for (int i = 0; i < wheelColliders.Length; i++)
         {
             WheelsRPM(i);
         }
         updateWheels();
-        HandBrake();
-        rotateWheels();
         Brakes();
+        if(!Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.D) && steeringAxis != 0f){
+          ResetSteeringAngle();
+        }
+        if(Input.GetKey(KeyCode.D))
+        {
+          TurnRight();
+        }
+        if(Input.GetKey(KeyCode.A))
+        {
+          TurnLeft();
+        }
+        CarSpeed = (2 * Mathf.PI * wheelColliders[0].radius * wheelColliders[0].rpm * 60) / 1000;
+        Debug.Log(CarSpeed);
     }
 
     void WheelsRPM(int i)
     {
         if (Input.GetAxis("Vertical") != 0)
+        {
             wheelColliders[i].motorTorque = Input.GetAxis("Vertical") * Torque * TransmissionRatio() * maxRPM * Time.deltaTime / wheelRollResistance;
+        }
         else
             wheelColliders[i].motorTorque = 0;
     }
@@ -146,96 +204,171 @@ public class CarController : MonoBehaviour
         }
     }
 
-    public void HandBrake()
-    {
-        if (Input.GetKey(KeyCode.Space))
-        {
-            for (int i = 0; i < wheelColliders.Length; i++)
-        {
-            wheelColliders[i].brakeTorque = handBrakeForce;
-        }
-        }
-        else
-        {   
-            for (int i = 0; i < wheelColliders.Length; i++)
-            {
-                wheelColliders[i].brakeTorque = 0;
-            }
-        }
-    }
-
-    void rotateWheels(){
-
-        vertical = Input.GetAxis("Vertical");
-        horizontal = Mathf.Lerp(horizontal , Input.GetAxis("Horizontal") , (Input.GetAxis("Horizontal") != 0) ? 2 * Time.deltaTime : 3 * 2 * Time.deltaTime);
-
-        finalTurnAngle = (radius > 5 ) ? radius : 5  ;
-
-        if (horizontal > 0 ) 
-        {
-				//rear tracks size is set to 1.5f       wheel base has been set to 2.55f
-            wheelColliders[0].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (finalTurnAngle - (1.5f / 2))) * horizontal;
-            wheelColliders[1].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (finalTurnAngle + (1.5f / 2))) * horizontal;
-        } 
-        else if (horizontal < 0 ) 
-        {                                                          
-            wheelColliders[0].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (finalTurnAngle + (1.5f / 2))) * horizontal;
-            wheelColliders[1].steerAngle = Mathf.Rad2Deg * Mathf.Atan(2.55f / (finalTurnAngle - (1.5f / 2))) * horizontal;
-			//transform.Rotate(Vector3.up * steerHelping);
-
-        } 
-        else 
-        {
-            wheelColliders[0].steerAngle =0;
-            wheelColliders[1].steerAngle =0;
-        }
-
-    }
 
     public void Brakes()
-    {
-        if(Input.GetAxis("Vertical") == 0)
+    {   
+        if(Input.GetAxis("Vertical") == 0 && Input.GetKey(KeyCode.Space))
         {
             for (int i = 0; i < wheelColliders.Length; i++)
             {
-                wheelColliders[i].brakeTorque = brakeForce;
+                wheelColliders[i].brakeTorque = brakeForce + handBrakeForce;
+                Handbrake();
             }
+        }
+        else if(Input.GetAxis("Vertical") != 0 && Input.GetKey(KeyCode.Space))
+        {
+            for (int i = 0; i < wheelColliders.Length; i++)
+            {
+                wheelColliders[i].brakeTorque = handBrakeForce;
+                Handbrake();
+            }
+        }
+    }
+
+    void DecelerateCar()
+    {
+        if(Math.Abs(localVelocityX) > 2.5)
+        {
+            isDrifting = true;
         }
         else
         {
-            for (int i = 0; i < wheelColliders.Length; i++)
-            {
-                wheelColliders[i].brakeTorque = 0;
-            }
+            isDrifting = false;
         }
     }
 
-    void CurrentBrakeForce()
-    {
-        switch (CurrentGear())
-        {
-            case 1:
-                brakeForce = 10000;
-                break;
-            case 2:
-                brakeForce = 8000;
-                break;
-            case 3:
-                brakeForce = 6000;
-                break;
-            case 4:
-                brakeForce = 2000;
-                break;
-            case 5: 
-                brakeForce = 1000;
-                break;
-            case 6:
-                brakeForce = 500;
-                break;
-            case 7:
-                brakeForce = 100;
-                break;
-        }
+    public void TurnLeft(){
+      steeringAxis = steeringAxis - (Time.deltaTime * 10f * steeringSpeed);
+      if(steeringAxis < -1f){
+        steeringAxis = -1f;
+      }
+      if (Input.GetAxis("Vertical") != 0)
+      {
+        steeringAngle = steeringAxis * maxSteeringAngle;
+      }
+      else
+      {
+        steeringAngle = steeringAxis * maxSteeringAngle * 1.5f;
+      }
+      wheelColliders[0].steerAngle = Mathf.Lerp(wheelColliders[0].steerAngle, steeringAngle, steeringSpeed);
+      wheelColliders[1].steerAngle = Mathf.Lerp(wheelColliders[1].steerAngle, steeringAngle, steeringSpeed);
     }
 
+    public void TurnRight(){
+      steeringAxis = steeringAxis + (Time.deltaTime * 10f * steeringSpeed);
+      if(steeringAxis > 1f){
+        steeringAxis = 1f;
+      }
+      if (Input.GetAxis("Vertical") != 0)
+      {
+        steeringAngle = steeringAxis * maxSteeringAngle;
+      }
+      else
+      {
+        steeringAngle = steeringAxis * maxSteeringAngle * 1.5f;
+      }
+      wheelColliders[0].steerAngle = Mathf.Lerp(wheelColliders[0].steerAngle, steeringAngle, steeringSpeed);
+      wheelColliders[1].steerAngle = Mathf.Lerp(wheelColliders[1].steerAngle, steeringAngle, steeringSpeed);
+    }
+
+    public void ResetSteeringAngle(){
+      if(steeringAxis < 0f){
+        steeringAxis = steeringAxis + (Time.deltaTime * 10f * steeringSpeed);
+      }else if(steeringAxis > 0f){
+        steeringAxis = steeringAxis - (Time.deltaTime * 10f * steeringSpeed);
+      }
+      if(Mathf.Abs(wheelColliders[0].steerAngle) < 1f){
+        steeringAxis = 0f;
+      }
+      var steeringAngle = steeringAxis * maxSteeringAngle;
+      wheelColliders[0].steerAngle = Mathf.Lerp(wheelColliders[0].steerAngle, steeringAngle, steeringSpeed);
+      wheelColliders[1].steerAngle = Mathf.Lerp(wheelColliders[1].steerAngle, steeringAngle, steeringSpeed);
+    }
+
+    public void RecoverTraction(){
+      isTractionLocked = false;
+      driftingAxis = driftingAxis - (Time.deltaTime / 1.5f);
+      if(driftingAxis < 0f){
+        driftingAxis = 0f;
+      }
+
+      //If the 'driftingAxis' value is not 0f, it means that the wheels have not recovered their traction.
+      //We are going to continue decreasing the sideways friction of the wheels until we reach the initial
+      // car's grip.
+      if(FLwheelFriction.extremumSlip > FLWextremumSlip){
+        FLwheelFriction.extremumSlip = FLWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[0].sidewaysFriction = FLwheelFriction;
+
+        FRwheelFriction.extremumSlip = FRWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[1].sidewaysFriction = FRwheelFriction;
+
+        RLwheelFriction.extremumSlip = RLWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[2].sidewaysFriction = RLwheelFriction;
+
+        RRwheelFriction.extremumSlip = RRWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[3].sidewaysFriction = RRwheelFriction;
+
+        Invoke("RecoverTraction", Time.deltaTime);
+
+      }
+      else if (FLwheelFriction.extremumSlip < FLWextremumSlip){
+        FLwheelFriction.extremumSlip = FLWextremumSlip;
+        wheelColliders[0].sidewaysFriction = FLwheelFriction;
+
+        FRwheelFriction.extremumSlip = FRWextremumSlip;
+        wheelColliders[1].sidewaysFriction = FRwheelFriction;
+
+        RLwheelFriction.extremumSlip = RLWextremumSlip;
+        wheelColliders[2].sidewaysFriction = RLwheelFriction;
+
+        RRwheelFriction.extremumSlip = RRWextremumSlip;
+        wheelColliders[3].sidewaysFriction = RRwheelFriction;
+
+        driftingAxis = 0f;
+      }
+    }
+
+    public void Handbrake(){
+      CancelInvoke("RecoverTraction");
+      // We are going to start losing traction smoothly, there is were our 'driftingAxis' variable takes
+      // place. This variable will start from 0 and will reach a top value of 1, which means that the maximum
+      // drifting value has been reached. It will increase smoothly by using the variable Time.deltaTime.
+      driftingAxis = driftingAxis + (Time.deltaTime);
+      float secureStartingPoint = driftingAxis * FLWextremumSlip * handbrakeDriftMultiplier;
+
+      if(secureStartingPoint < FLWextremumSlip){
+        driftingAxis = FLWextremumSlip / (FLWextremumSlip * handbrakeDriftMultiplier);
+      }
+      if(driftingAxis > 1f){
+        driftingAxis = 1f;
+      }
+      //If the forces aplied to the rigidbody in the 'x' asis are greater than
+      //3f, it means that the car lost its traction, then the car will start emitting particle systems.
+      if(Mathf.Abs(localVelocityX) > 2.5f){
+        isDrifting = true;
+      }else{
+        isDrifting = false;
+      }
+      //If the 'driftingAxis' value is not 1f, it means that the wheels have not reach their maximum drifting
+      //value, so, we are going to continue increasing the sideways friction of the wheels until driftingAxis
+      // = 1f.
+      if(driftingAxis < 1f){
+        FLwheelFriction.extremumSlip = FLWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[0].sidewaysFriction = FLwheelFriction;
+
+        FRwheelFriction.extremumSlip = FRWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[1].sidewaysFriction = FRwheelFriction;
+
+        RLwheelFriction.extremumSlip = RLWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[2].sidewaysFriction = RLwheelFriction;
+
+        RRwheelFriction.extremumSlip = RRWextremumSlip * handbrakeDriftMultiplier * driftingAxis;
+        wheelColliders[3].sidewaysFriction = RRwheelFriction;
+      }
+
+      // Whenever the player uses the handbrake, it means that the wheels are locked, so we set 'isTractionLocked = true'
+      // and, as a consequense, the car starts to emit trails to simulate the wheel skids.
+      isTractionLocked = true;
+    }
+    
 }
