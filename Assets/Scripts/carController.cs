@@ -7,8 +7,10 @@ using System;
 public class CarController : MonoBehaviour
 {
     [Header("Engine settings")]
+    [SerializeField] float crankshaftRotationRate;
     [Tooltip("More torque - more speed")]
-    public float Torque = 1000f; 
+    [SerializeField] float Torque = 1000f;
+    [HideInInspector] float transmissionEfficiency = 0.97f; 
     public float[] Gears;
     public float maxRPM, minRPM;
     public AnimationCurve AccelerationCurve;
@@ -39,7 +41,10 @@ public class CarController : MonoBehaviour
     WheelFrictionCurve RRwheelFriction;
     float RRWextremumSlip;
     
-
+    [Header("Environment")]
+    [HideInInspector] float airDensity = 1.225f;
+    [HideInInspector] float coeffAirResistance = 0.32f;
+    [SerializeField] float airResistanceForce;
 
     void Awake()
     {
@@ -84,10 +89,11 @@ public class CarController : MonoBehaviour
     { 
         localVelocityX = transform.InverseTransformDirection(rb.velocity).x;
         CurrentEngineRPM();
-        for (int i = 0; i < wheelColliders.Length; i++)
-        {
-            WheelsRPM(i);
-        }
+        // for (int i = 0; i < wheelColliders.Length; i++)
+        // {
+        //   WheelsRPM(i);
+        // }
+		TractionForce();
         updateWheels();
         Brakes();
         if(!Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.D) && steeringAxis != 0f){
@@ -101,7 +107,6 @@ public class CarController : MonoBehaviour
         {
           TurnLeft();
         }
-        CarSpeed = (2 * Mathf.PI * wheelColliders[0].radius * wheelColliders[0].rpm * 60) / 1000;
         Debug.Log(CarSpeed);
     }
 
@@ -109,10 +114,10 @@ public class CarController : MonoBehaviour
     {
         if (Input.GetAxis("Vertical") != 0)
         {
-            wheelColliders[i].motorTorque = Input.GetAxis("Vertical") * Torque * TransmissionRatio() * maxRPM * Time.deltaTime / wheelRollResistance;
+          wheelColliders[i].motorTorque = Input.GetAxis("Vertical") * Torque * TransmissionRatio() * maxRPM * Time.deltaTime / wheelRollResistance;
         }
         else
-            wheelColliders[i].motorTorque = 0;
+          wheelColliders[i].motorTorque = 0;
     }
 
     //Counting wheel RPM based on number of wheels and .rpm
@@ -370,5 +375,45 @@ public class CarController : MonoBehaviour
       // and, as a consequense, the car starts to emit trails to simulate the wheel skids.
       isTractionLocked = true;
     }
-    
+
+  float AirResistanceForce()
+  {
+    if (CurrentSpeed() > 15)
+    {
+      airResistanceForce = airDensity * coeffAirResistance * CurrentSpeed() * CurrentSpeed();
+      return airResistanceForce;
+    }
+    else
+    {
+      airResistanceForce = 1;
+      return airResistanceForce;
+    }
+  }
+
+  float CurrentTorque()
+  {
+    Torque = crankshaftRotationRate * Gears[CurrentGear()] * transmissionEfficiency;
+    return Torque;
+  }
+
+  void TractionForce()
+  {
+	if (Input.GetAxis("Vertical") != 0)
+	{
+		wheelColliders[0].motorTorque = CurrentTorque() / 2 / wheelColliders[0].radius * Input.GetAxis("Vertical") * Time.deltaTime * 1000;
+    	wheelColliders[1].motorTorque = CurrentTorque() / 2 / wheelColliders[1].radius * Input.GetAxis("Vertical") * Time.deltaTime * 1000;
+	}
+	else
+	{
+		wheelColliders[0].motorTorque = 0;
+		wheelColliders[1].motorTorque = 0;
+	}
+  }
+  
+  float CurrentSpeed()
+  {
+    CarSpeed = 0.377f * crankshaftRotationRate * wheelColliders[0].radius / Gears[CurrentGear()];
+    return CarSpeed;
+  }
+
 }
