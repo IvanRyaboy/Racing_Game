@@ -9,11 +9,12 @@ public class CarController : MonoBehaviour
     [Header("Engine settings")]
     [SerializeField] float crankshaftRotationRate;
     [Tooltip("More torque - more speed")]
-    [SerializeField] float Torque = 1000f;
-    [HideInInspector] float transmissionEfficiency = 0.97f; 
+    [HideInInspector] float Torque;
+    [HideInInspector] float transmissionEfficiency = 0.97f;
     public float[] Gears;
-    public float maxRPM, minRPM;
+    private float maxSpeedRPM = 8500f, maxPoverRPM = 5600f;
     public AnimationCurve AccelerationCurve;
+
     [Header("Wheel settings")]
     public WheelCollider[] wheelColliders;
     public Transform[] wheelTransforms;
@@ -25,7 +26,6 @@ public class CarController : MonoBehaviour
     float maxSteeringAngle = 27f;
     private Quaternion wheelRotation;
     private Vector3 wheelPosition;
-    [HideInInspector] public inputs input;
     [HideInInspector] Rigidbody rb;
     private bool isTractionLocked, isDrifting;
     int GearNum = 0;
@@ -62,21 +62,24 @@ public class CarController : MonoBehaviour
         FLwheelFriction.asymptoteSlip = wheelColliders[0].sidewaysFriction.asymptoteSlip;
         FLwheelFriction.asymptoteValue = wheelColliders[0].sidewaysFriction.asymptoteValue;
         FLwheelFriction.stiffness = wheelColliders[0].sidewaysFriction.stiffness;
-      FRwheelFriction = new WheelFrictionCurve ();
+    	
+		FRwheelFriction = new WheelFrictionCurve ();
         FRwheelFriction.extremumSlip = wheelColliders[1].sidewaysFriction.extremumSlip;
         FRWextremumSlip = wheelColliders[1].sidewaysFriction.extremumSlip;
         FRwheelFriction.extremumValue = wheelColliders[1].sidewaysFriction.extremumValue;
         FRwheelFriction.asymptoteSlip = wheelColliders[1].sidewaysFriction.asymptoteSlip;
         FRwheelFriction.asymptoteValue = wheelColliders[1].sidewaysFriction.asymptoteValue;
         FRwheelFriction.stiffness = wheelColliders[1].sidewaysFriction.stiffness;
-      RLwheelFriction = new WheelFrictionCurve ();
+    	
+		RLwheelFriction = new WheelFrictionCurve ();
         RLwheelFriction.extremumSlip = wheelColliders[2].sidewaysFriction.extremumSlip;
         RLWextremumSlip = wheelColliders[2].sidewaysFriction.extremumSlip;
         RLwheelFriction.extremumValue = wheelColliders[2].sidewaysFriction.extremumValue;
         RLwheelFriction.asymptoteSlip = wheelColliders[2].sidewaysFriction.asymptoteSlip;
         RLwheelFriction.asymptoteValue = wheelColliders[2].sidewaysFriction.asymptoteValue;
         RLwheelFriction.stiffness = wheelColliders[2].sidewaysFriction.stiffness;
-      RRwheelFriction = new WheelFrictionCurve ();
+    	
+		RRwheelFriction = new WheelFrictionCurve ();
         RRwheelFriction.extremumSlip = wheelColliders[3].sidewaysFriction.extremumSlip;
         RRWextremumSlip = wheelColliders[3].sidewaysFriction.extremumSlip;
         RRwheelFriction.extremumValue = wheelColliders[3].sidewaysFriction.extremumValue;
@@ -86,38 +89,33 @@ public class CarController : MonoBehaviour
     }
 
     void Update()
-    { 
+    {
         localVelocityX = transform.InverseTransformDirection(rb.velocity).x;
-        CurrentEngineRPM();
         // for (int i = 0; i < wheelColliders.Length; i++)
         // {
         //   WheelsRPM(i);
         // }
-		TractionForce();
+        TractionForce();
         updateWheels();
         Brakes();
-        if(!Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.D) && steeringAxis != 0f){
-          ResetSteeringAngle();
-        }
-        if(Input.GetKey(KeyCode.D))
-        {
-          TurnRight();
-        }
-        if(Input.GetKey(KeyCode.A))
-        {
-          TurnLeft();
-        }
-        Debug.Log(CarSpeed);
+        Turning();
+        Debug.Log(CurrentSpeed());
     }
 
-    void WheelsRPM(int i)
+    private void Turning()
     {
-        if (Input.GetAxis("Vertical") != 0)
+        if (!Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.D) && steeringAxis != 0f)
         {
-          wheelColliders[i].motorTorque = Input.GetAxis("Vertical") * Torque * TransmissionRatio() * maxRPM * Time.deltaTime / wheelRollResistance;
+            ResetSteeringAngle();
         }
-        else
-          wheelColliders[i].motorTorque = 0;
+        if (Input.GetKey(KeyCode.D))
+        {
+            TurnRight();
+        }
+        if (Input.GetKey(KeyCode.A))
+        {
+            TurnLeft();
+        }
     }
 
     //Counting wheel RPM based on number of wheels and .rpm
@@ -181,35 +179,6 @@ public class CarController : MonoBehaviour
         }
     }
 
-    void CurrentEngineRPM()
-    {
-        switch (CurrentGear())
-        {
-            case 1:
-                maxRPM = 4000;
-                break;
-            case 2:
-                maxRPM = 5000;
-                break;
-            case 3:
-                maxRPM = 6000;
-                break;
-            case 4:
-                maxRPM = 7000;
-                break;
-            case 5: 
-                maxRPM = 8000;
-                break;
-            case 6:
-                maxRPM = 9000;
-                break;
-            case 7:
-                maxRPM = 10000;
-                break;
-        }
-    }
-
-
     public void Brakes()
     {   
         if(Input.GetAxis("Vertical") == 0 && Input.GetKey(KeyCode.Space))
@@ -247,7 +216,7 @@ public class CarController : MonoBehaviour
       if(steeringAxis < -1f){
         steeringAxis = -1f;
       }
-      if (Input.GetAxis("Vertical") != 0)
+      if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S))
       {
         steeringAngle = steeringAxis * maxSteeringAngle;
       }
@@ -264,7 +233,7 @@ public class CarController : MonoBehaviour
       if(steeringAxis > 1f){
         steeringAxis = 1f;
       }
-      if (Input.GetAxis("Vertical") != 0)
+      if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S))
       {
         steeringAngle = steeringAxis * maxSteeringAngle;
       }
@@ -376,6 +345,7 @@ public class CarController : MonoBehaviour
       isTractionLocked = true;
     }
 
+  //Counting air resistance != air speed
   float AirResistanceForce()
   {
     if (CurrentSpeed() > 15)
@@ -390,30 +360,39 @@ public class CarController : MonoBehaviour
     }
   }
 
+  //find motor torque with number of crankshaft turns, speed ratio and transmission efficienty
   float CurrentTorque()
   {
     Torque = crankshaftRotationRate * Gears[CurrentGear()] * transmissionEfficiency;
     return Torque;
   }
 
+  //give the .motorTorque to wheels. Move car forvard and backvard
   void TractionForce()
   {
-	if (Input.GetAxis("Vertical") != 0)
+	if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S))
 	{
-		wheelColliders[0].motorTorque = CurrentTorque() / 2 / wheelColliders[0].radius * Input.GetAxis("Vertical") * Time.deltaTime * 1000;
-    	wheelColliders[1].motorTorque = CurrentTorque() / 2 / wheelColliders[1].radius * Input.GetAxis("Vertical") * Time.deltaTime * 1000;
+		wheelColliders[2].motorTorque = CurrentTorque() / 2 / wheelColliders[0].radius * Input.GetAxis("Vertical") * Time.deltaTime * 1000;
+    	wheelColliders[3].motorTorque = CurrentTorque() / 2 / wheelColliders[1].radius * Input.GetAxis("Vertical") * Time.deltaTime * 1000;
 	}
 	else
 	{
-		wheelColliders[0].motorTorque = 0;
-		wheelColliders[1].motorTorque = 0;
+		wheelColliders[2].motorTorque = 0;
+		wheelColliders[3].motorTorque = 0;
 	}
   }
   
+  //Counting car speed in the moment
   float CurrentSpeed()
   {
-    CarSpeed = 0.377f * crankshaftRotationRate * wheelColliders[0].radius / Gears[CurrentGear()];
+    CarSpeed = 0.377f * crankshaftRotationRate * wheelColliders[0].radius / TransmissionRatio();
+	Debug.Log(TransmissionRatio());
     return CarSpeed;
+  }
+
+  void InercionForce()
+  {
+
   }
 
 }
