@@ -311,6 +311,14 @@ PrefabInstance:
       propertyPath: crankshaftRotationRate
       value: 6000
       objectReference: {fileID: 0}
+    - target: {fileID: 75982702, guid: c85efbd2671409a46a80229254238cf7, type: 3}
+      propertyPath: AccelerationCurve.m_Curve.Array.data[0].time
+      value: 0.0069351196
+      objectReference: {fileID: 0}
+    - target: {fileID: 75982702, guid: c85efbd2671409a46a80229254238cf7, type: 3}
+      propertyPath: AccelerationCurve.m_Curve.Array.data[0].value
+      value: 0.9480591
+      objectReference: {fileID: 0}
     - target: {fileID: 1360932683352734, guid: c85efbd2671409a46a80229254238cf7, type: 3}
       propertyPath: m_Name
       value: Sports Coupe
